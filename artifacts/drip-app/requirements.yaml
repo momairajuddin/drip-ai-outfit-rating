@@ -1,0 +1,16 @@
+packages:
+  "framer-motion": "For page transitions, score counting animations, and staggered list reveals"
+  "recharts": "For the Style DNA radar charts and score trend line charts"
+  "html2canvas": "To capture the result scorecard for the share feature"
+  "clsx": "For conditional class name merging in UI components"
+  "tailwind-merge": "For safely merging tailwind classes in reusable components"
+
+images:
+  - path: "artifacts/drip-app/public/images/splash-bg.png"
+    description: "Ultra dark, moody, high-fashion editorial abstract background with pure black and very subtle warm off-white film grain texture"
+    aspect_ratio: "9:16"
+
+notes:
+  - Uses the provided @workspace/api-client-react types
+  - JWT Auth token stored in localStorage ('drip_token')
+  - Follows "Editorial Noir" design: pure black, off-white, gold/silver/bronze/steel score colors, 0px border radius, Cormorant Garamond display font.

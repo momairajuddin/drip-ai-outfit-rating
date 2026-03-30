@@ -1,0 +1,771 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: DRIP. API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: scan
+    description: Outfit scanning and analysis
+  - name: style
+    description: Style DNA and recommendations
+  - name: social
+    description: Leaderboard and stats
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Create account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterBody"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email or username already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /scan:
+    post:
+      operationId: createScan
+      tags: [scan]
+      summary: Upload outfit photo for AI analysis
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+              required:
+                - image
+      responses:
+        "201":
+          description: Scan created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+        "400":
+          description: Invalid image
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /scan/history:
+    get:
+      operationId: getScanHistory
+      tags: [scan]
+      summary: Get user scan history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [date_desc, date_asc, score_desc, score_asc]
+            default: date_desc
+      responses:
+        "200":
+          description: Scan history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanHistoryResponse"
+
+  /scan/{id}:
+    get:
+      operationId: getScanById
+      tags: [scan]
+      summary: Get single scan result
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Scan result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+        "404":
+          description: Scan not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /similar/{scanId}:
+    get:
+      operationId: getSimilarOutfits
+      tags: [style]
+      summary: Get similar outfit inspiration
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: scanId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Similar outfits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SimilarOutfit"
+
+  /recommendations/{scanId}:
+    get:
+      operationId: getRecommendations
+      tags: [style]
+      summary: Get upgrade recommendations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: scanId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Upgrade recommendations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UpgradeRecommendation"
+
+  /style-dna:
+    get:
+      operationId: getStyleDna
+      tags: [style]
+      summary: Get user Style DNA profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Style DNA
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StyleDnaResponse"
+
+  /style-dna/report:
+    get:
+      operationId: getStyleReport
+      tags: [style]
+      summary: Get monthly style report
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Style report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StyleReportResponse"
+
+  /leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [social]
+      summary: Get top scores
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, all_time]
+            default: all_time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Leaderboard
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderboardEntry"
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [social]
+      summary: Global app stats
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppStats"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    RegisterBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        password:
+          type: string
+      required:
+        - email
+        - username
+        - password
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserProfile"
+      required:
+        - token
+        - user
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        username:
+          type: string
+        isPremium:
+          type: boolean
+        totalScans:
+          type: integer
+        highestScore:
+          type: number
+        avgScore:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - email
+        - username
+        - isPremium
+        - totalScans
+        - highestScore
+        - avgScore
+        - createdAt
+
+    CategoryScore:
+      type: object
+      properties:
+        score:
+          type: number
+        detail:
+          type: string
+      required:
+        - score
+        - detail
+
+    OccasionMatch:
+      type: object
+      properties:
+        casualHangout:
+          type: number
+        dateNight:
+          type: number
+        workOffice:
+          type: number
+        formalEvent:
+          type: number
+        streetwearFlex:
+          type: number
+      required:
+        - casualHangout
+        - dateNight
+        - workOffice
+        - formalEvent
+        - streetwearFlex
+
+    UpgradeRecommendation:
+      type: object
+      properties:
+        swap:
+          type: string
+        with:
+          type: string
+        predictedScoreIncrease:
+          type: number
+        searchQuery:
+          type: string
+        priceRange:
+          type: string
+      required:
+        - swap
+        - with
+        - predictedScoreIncrease
+        - searchQuery
+        - priceRange
+
+    CelebrityMatch:
+      type: object
+      properties:
+        name:
+          type: string
+        matchPercentage:
+          type: number
+        description:
+          type: string
+      required:
+        - name
+        - matchPercentage
+        - description
+
+    ScanResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        imagePath:
+          type: string
+        overallScore:
+          type: number
+        scores:
+          type: object
+          properties:
+            fit:
+              $ref: "#/components/schemas/CategoryScore"
+            color:
+              $ref: "#/components/schemas/CategoryScore"
+            styleCoherence:
+              $ref: "#/components/schemas/CategoryScore"
+            trendAlignment:
+              $ref: "#/components/schemas/CategoryScore"
+            signatureFactor:
+              $ref: "#/components/schemas/CategoryScore"
+          required:
+            - fit
+            - color
+            - styleCoherence
+            - trendAlignment
+            - signatureFactor
+        styleArchetype:
+          type: string
+        archetypeDescription:
+          type: string
+        vibeTags:
+          type: array
+          items:
+            type: string
+        bestElement:
+          type: string
+        weakestElement:
+          type: string
+        occasionMatch:
+          $ref: "#/components/schemas/OccasionMatch"
+        upgrades:
+          type: array
+          items:
+            $ref: "#/components/schemas/UpgradeRecommendation"
+        similarQueries:
+          type: array
+          items:
+            type: string
+        colorPalette:
+          type: array
+          items:
+            type: string
+        season:
+          type: string
+        celebrityMatch:
+          $ref: "#/components/schemas/CelebrityMatch"
+        genderDetected:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - imagePath
+        - overallScore
+        - scores
+        - styleArchetype
+        - archetypeDescription
+        - vibeTags
+        - bestElement
+        - weakestElement
+        - occasionMatch
+        - upgrades
+        - similarQueries
+        - colorPalette
+        - season
+        - celebrityMatch
+        - genderDetected
+        - createdAt
+
+    ScanHistoryResponse:
+      type: object
+      properties:
+        scans:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanSummary"
+        total:
+          type: integer
+        page:
+          type: integer
+        totalPages:
+          type: integer
+        stats:
+          $ref: "#/components/schemas/UserScanStats"
+      required:
+        - scans
+        - total
+        - page
+        - totalPages
+        - stats
+
+    ScanSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        imagePath:
+          type: string
+        overallScore:
+          type: number
+        styleArchetype:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - imagePath
+        - overallScore
+        - styleArchetype
+        - createdAt
+
+    UserScanStats:
+      type: object
+      properties:
+        totalScans:
+          type: integer
+        avgScore:
+          type: number
+        highestScore:
+          type: number
+        highestScoreDate:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - totalScans
+        - avgScore
+        - highestScore
+
+    SimilarOutfit:
+      type: object
+      properties:
+        id:
+          type: integer
+        imageUrl:
+          type: string
+        sourceUrl:
+          type: ["string", "null"]
+        title:
+          type: ["string", "null"]
+        styleTag:
+          type: ["string", "null"]
+      required:
+        - id
+        - imageUrl
+
+    StyleDnaResponse:
+      type: object
+      properties:
+        locked:
+          type: boolean
+        scansNeeded:
+          type: integer
+        dominantArchetype:
+          type: ["string", "null"]
+        archetypePercentage:
+          type: ["number", "null"]
+        topColors:
+          type: array
+          items:
+            type: string
+        avgScores:
+          type: ["object", "null"]
+        totalOutfitsScanned:
+          type: integer
+        bestOutfit:
+          $ref: "#/components/schemas/ScanSummary"
+        worstOutfit:
+          $ref: "#/components/schemas/ScanSummary"
+        styleEvolution:
+          type: array
+          items:
+            type: object
+            properties:
+              archetype:
+                type: string
+              date:
+                type: string
+                format: date-time
+              score:
+                type: number
+            required:
+              - archetype
+              - date
+              - score
+        scoreTrend:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date-time
+              score:
+                type: number
+            required:
+              - date
+              - score
+      required:
+        - locked
+        - scansNeeded
+        - totalOutfitsScanned
+
+    StyleReportResponse:
+      type: object
+      properties:
+        available:
+          type: boolean
+        totalOutfits:
+          type: integer
+        avgScore:
+          type: number
+        scoreTrend:
+          type: string
+          enum: [up, down, stable]
+        mostWornStyle:
+          type: ["string", "null"]
+        bestOutfit:
+          $ref: "#/components/schemas/ScanSummary"
+        topColorPalette:
+          type: array
+          items:
+            type: string
+        styleInOneWord:
+          type: ["string", "null"]
+      required:
+        - available
+        - totalOutfits
+        - avgScore
+        - scoreTrend
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        overallScore:
+          type: number
+        styleArchetype:
+          type: string
+        imagePath:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - username
+        - overallScore
+        - styleArchetype
+        - imagePath
+        - createdAt
+
+    AppStats:
+      type: object
+      properties:
+        totalScans:
+          type: integer
+        totalUsers:
+          type: integer
+        avgScore:
+          type: number
+        topArchetype:
+          type: string
+      required:
+        - totalScans
+        - totalUsers
+        - avgScore
+        - topArchetype

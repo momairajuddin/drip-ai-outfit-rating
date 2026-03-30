@@ -1,0 +1,767 @@
+# DRIP. — Complete Build Prompt
+
+## WHAT THIS IS
+
+DRIP. is an AI-powered outfit rating app. You take a mirror selfie, AI scores your outfit 1-10 with a detailed breakdown, shows you similar outfits for inspiration, and recommends specific upgrades to raise your score. Think "CalAI for food, Umax for faces — DRIP. for fashion." The result is a beautiful, shareable score card designed to go viral on TikTok and Instagram.
+
+This is a full-stack application: React frontend deployed as a Progressive Web App (installable on both iOS and Android home screens), Node/Express backend, SQLite database, and OpenAI Vision API integration. It must be publicly accessible via URL so anyone can use it from their phone.
+
+---
+
+## PLATFORM STRATEGY
+
+Build as a **Progressive Web App (PWA)** with full mobile optimization. This is the fastest path to both iOS and Android:
+- Users visit the URL on any phone browser
+- "Add to Home Screen" prompt makes it feel native (full-screen, no browser chrome, app icon)
+- Works identically on iOS Safari and Android Chrome
+- No App Store approval needed — judges at the competition can try it instantly on their own phones
+- Include a proper `manifest.json` and service worker for PWA installability
+
+The entire UI must be designed mobile-first at 390px width. On desktop, center the app in a phone-shaped container (max-width 430px, centered, with a subtle device frame shadow) so it always looks like a mobile app.
+
+---
+
+## TECH STACK
+
+- **Frontend:** React 18+ with Vite, TailwindCSS, Framer Motion for animations
+- **Backend:** Node.js with Express
+- **Database:** SQLite via better-sqlite3
+- **AI:** OpenAI API (GPT-4o with vision) for outfit analysis
+- **Image Handling:** Multer for upload, sharp for image processing/compression
+- **Auth:** Simple JWT-based auth (email + password)
+- **Deployment:** Replit auto-deploy (publicly accessible URL)
+- **PWA:** manifest.json + service worker for home screen installation
+
+Environment variables needed:
+```
+OPENAI_API_KEY=
+JWT_SECRET=
+```
+
+---
+
+## DESIGN SYSTEM — "Editorial Noir"
+
+### Aesthetic Direction
+The design language is **luxury fashion editorial meets minimalist tech**. Think: the visual identity of a Celine runway show crossed with Apple's hardware design. True black. Sharp white. Surgical typography. Every pixel is deliberate. The app should feel like picking up a Vogue magazine printed on obsidian glass.
+
+This is NOT generic dark mode. This is fashion-world darkness — confident, editorial, elevated. The only color comes from the score itself, which shifts based on rating tier (gold for elite, silver for great, etc). This creates a natural psychological drive: users want to see GOLD.
+
+### Color System (CSS variables)
+```css
+:root {
+  /* Foundations */
+  --black: #000000;
+  --black-rich: #050505;           /* Slightly off-black for layered surfaces */
+  --black-elevated: #0A0A0A;      /* Cards sitting on top of black */
+  --black-hover: #111111;         /* Hover/active states */
+  --border: #1A1A1A;              /* Ultra-subtle borders */
+  --border-light: #222222;        /* Slightly more visible borders */
+  
+  /* Text */
+  --white: #F5F5F0;               /* Warm off-white — NOT pure #FFF. Feels luxe, not clinical */
+  --white-pure: #FFFFFF;          /* Only used for scores and critical emphasis */
+  --grey-1: #AAAAAA;             /* Secondary text */
+  --grey-2: #666666;             /* Tertiary text, timestamps */
+  --grey-3: #333333;             /* Disabled states, placeholders */
+  
+  /* Score Tier Colors — THE ONLY COLOR IN THE APP */
+  --score-gold: #C9A84C;         /* 9.0 - 10.0 — "Elite" — warm, muted luxury gold, not shiny/tacky */
+  --score-silver: #B8B8B8;       /* 7.5 - 8.9 — "Fire" — clean platinum */
+  --score-bronze: #8B7355;       /* 6.0 - 7.4 — "Solid" — warm bronze, not orange */
+  --score-steel: #555555;        /* Below 6.0 — "Needs Work" — muted steel */
+  
+  /* Score Glows (used behind score numbers) */
+  --glow-gold: rgba(201, 168, 76, 0.12);
+  --glow-silver: rgba(184, 184, 184, 0.10);
+  --glow-bronze: rgba(139, 115, 85, 0.10);
+  
+  /* Functional */
+  --up: #4ADE80;                  /* Score went up from last scan — subtle green */
+  --down: #F87171;               /* Score went down — subtle red */
+}
+```
+
+### Typography
+- **Display / Brand:** "Cormorant Garamond" (Google Fonts) — weight 600/700. This is a high-fashion serif used by actual luxury brands. Used for: the app name "DRIP.", score numbers, section titles, the result card headline. This font alone separates the app from every generic tech product.
+- **Body / UI:** "Outfit" (Google Fonts) — weight 300/400/500. A modern geometric sans-serif. Clean, readable, slightly fashion-forward. Used for: body text, labels, buttons, descriptions.
+- **Data / Scores:** "Cormorant Garamond" at large sizes with letter-spacing: -0.02em. Scores should feel like a magazine cover headline, not a dashboard metric.
+
+### Layout Rules
+- Max app width: 430px, centered on desktop inside a subtle phone-frame shadow
+- All content padding: 20px horizontal
+- Card border-radius: 2px (sharp, editorial — NOT rounded. Fashion is angular.)
+- Button border-radius: 0px (fully sharp/square — this is a design choice that feels intentional and high-fashion)
+- Card borders: 1px solid var(--border), no box-shadows (shadows feel techy, borders feel editorial)
+- Section spacing: 48px between major sections
+- Text should breathe — generous line-height (1.6 for body, 1.1 for display)
+- ALL CAPS for labels and category names (letter-spacing: 0.12em) — editorial convention
+
+### Motion & Animation (Framer Motion)
+- Page transitions: fade + subtle vertical shift (y: 10px → 0), duration 0.3s
+- Cards: stagger fade-in, 80ms delay between each
+- Score reveal: the number should "count up" from 0 to final score over 1.5 seconds with an easing curve, then pulse-glow once in its tier color
+- Photo upload: subtle scale animation on the preview
+- Pull-to-refresh: custom animation (not browser default)
+- Skeleton loading: dark shimmer effect (from #0A0A0A to #151515, not grey)
+- Button press: scale(0.97) for 100ms, no color change — tactile, minimal
+- Score card entrance: cinematic — fade up from black with slight blur-to-clear transition
+
+### Photography & Image Treatment
+- User photos displayed with a very subtle vignette overlay (darker edges)
+- All outfit photos (user's and similar outfits) displayed in consistent aspect ratios — 3:4 portrait
+- Similar outfit images should feel like an editorial mood board grid
+
+---
+
+## BACKEND API DESIGN
+
+### Endpoints
+
+```
+POST   /api/auth/register              — Create account (email, password, username)
+POST   /api/auth/login                 — Login, returns JWT
+GET    /api/auth/me                    — Get current user from token
+
+POST   /api/scan                       — Upload outfit photo, receive AI analysis
+GET    /api/scan/history               — Get user's scan history (paginated)
+GET    /api/scan/:id                   — Get single scan result with full details
+
+GET    /api/style-dna                  — Get user's Style DNA profile (aggregated from scans)
+GET    /api/style-dna/report           — Get monthly Style Report data
+
+GET    /api/similar/:scanId            — Get similar outfit inspiration for a scan
+GET    /api/recommendations/:scanId    — Get upgrade recommendations for a scan
+
+GET    /api/leaderboard                — Top scores (anonymous, by score)
+GET    /api/stats                      — Global app stats for landing page
+```
+
+### Core AI Integration — The /api/scan Endpoint
+
+When a user uploads an outfit photo, the backend:
+
+1. Saves the image, compresses it with sharp
+2. Sends it to OpenAI GPT-4o Vision API with this system prompt:
+
+```
+You are DRIP., the world's most sophisticated AI fashion analyst. You combine the eye of a Vogue editor, the precision of a stylist, and the cultural awareness of a trend forecaster.
+
+Analyze this outfit photo and return a comprehensive rating. Be specific, opinionated, and constructive — never generic. Reference actual fashion concepts, color theory, and current trends.
+
+Return ONLY valid JSON — no markdown, no backticks, no explanation outside the JSON:
+
+{
+  "overall_score": 8.4,
+  "scores": {
+    "fit": {
+      "score": 9,
+      "detail": "Specific observation about how garments fit the body — proportions, tailoring, silhouette"
+    },
+    "color": {
+      "score": 7,
+      "detail": "Analysis of color palette, harmony, contrast, skin tone compatibility"
+    },
+    "style_coherence": {
+      "score": 8,
+      "detail": "How well the pieces work together as a unified look — does it tell a story?"
+    },
+    "trend_alignment": {
+      "score": 9,
+      "detail": "How current/relevant the outfit feels in 2026 fashion landscape"
+    },
+    "signature_factor": {
+      "score": 7,
+      "detail": "Does this outfit have personality? Is it memorable or forgettable?"
+    }
+  },
+  "style_archetype": "Old Money Casual",
+  "style_archetype_description": "1-2 sentence description of this archetype",
+  "vibe_tags": ["effortless", "refined", "understated"],
+  "best_element": "The oversized blazer creates a strong shoulder line that anchors the whole look",
+  "weakest_element": "The brown shoes clash with the cool-toned palette — a tonal mismatch",
+  "occasion_match": {
+    "casual_hangout": 9,
+    "date_night": 7,
+    "work_office": 8,
+    "formal_event": 5,
+    "streetwear_flex": 6
+  },
+  "upgrades": [
+    {
+      "swap": "Replace brown leather shoes",
+      "with": "White leather minimal sneakers or black chelsea boots",
+      "predicted_score_increase": 0.7,
+      "search_query": "white minimal leather sneakers men",
+      "price_range": "$80-$150"
+    },
+    {
+      "swap": "Add an accessory",
+      "with": "Silver minimal watch or thin chain necklace",
+      "predicted_score_increase": 0.4,
+      "search_query": "minimal silver watch",
+      "price_range": "$40-$120"
+    }
+  ],
+  "similar_style_search_queries": [
+    "old money casual men fall outfit",
+    "blazer with relaxed trousers editorial",
+    "quiet luxury menswear 2026"
+  ],
+  "color_palette_detected": ["#2C3E50", "#ECF0F1", "#8B4513"],
+  "season_alignment": "fall/winter",
+  "celebrity_style_match": {
+    "name": "Jacob Elordi",
+    "match_percentage": 78,
+    "description": "Shares the tall, relaxed tailoring sensibility"
+  },
+  "gender_detected": "male"
+}
+
+RULES:
+- Be brutally honest but never cruel. Think constructive fashion editor, not mean judge.
+- Overall score should be an average weighted toward fit (25%), color (20%), style_coherence (25%), trend_alignment (15%), signature_factor (15%).
+- Scores 9-10 should be RARE and genuinely earned. Most outfits are 5-8. Don't inflate.
+- If the image is not a person wearing clothes (e.g., a landscape, food, object), return: {"error": "no_outfit_detected", "message": "I need a photo of you wearing an outfit to rate your drip."}
+- Always provide at least 2 upgrade suggestions.
+- similar_style_search_queries should be specific enough to find similar outfits on Google/Pinterest.
+- Detect gender from the outfit to tailor advice appropriately. Use neutral language if ambiguous.
+```
+
+3. Parses the JSON response
+4. Stores the scan result in the database
+5. Asynchronously fetches similar outfit images using the similar_style_search_queries (use a Google Custom Search API or pre-loaded curated outfit database)
+6. Returns the complete result to the frontend
+
+### Fallback System
+If the OpenAI API fails or times out (>15 seconds), return a pre-built fallback analysis with realistic scores and generic-but-good advice. The demo must NEVER break. Store 5-6 different fallback results and randomly select one, adjusting the style archetype based on simple image characteristics.
+
+---
+
+## DATABASE SCHEMA
+
+```sql
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  is_premium BOOLEAN DEFAULT FALSE,
+  total_scans INTEGER DEFAULT 0,
+  highest_score REAL DEFAULT 0,
+  avg_score REAL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE scans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id),
+  image_path TEXT NOT NULL,
+  overall_score REAL NOT NULL,
+  fit_score REAL,
+  color_score REAL,
+  coherence_score REAL,
+  trend_score REAL,
+  signature_score REAL,
+  style_archetype TEXT,
+  archetype_description TEXT,
+  vibe_tags TEXT,              -- JSON array
+  best_element TEXT,
+  weakest_element TEXT,
+  occasion_match TEXT,         -- JSON object
+  upgrades TEXT,               -- JSON array
+  similar_queries TEXT,        -- JSON array
+  color_palette TEXT,          -- JSON array
+  season TEXT,
+  celebrity_match TEXT,        -- JSON object
+  gender_detected TEXT,
+  full_analysis TEXT,          -- Full raw JSON from AI
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE similar_outfits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  scan_id INTEGER REFERENCES scans(id),
+  image_url TEXT NOT NULL,
+  source_url TEXT,
+  title TEXT,
+  style_tag TEXT
+);
+
+CREATE TABLE style_dna (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id) UNIQUE,
+  dominant_archetype TEXT,
+  top_colors TEXT,             -- JSON array of most-worn hex colors
+  avg_scores TEXT,             -- JSON object of category averages
+  total_outfits_scanned INTEGER DEFAULT 0,
+  best_outfit_id INTEGER REFERENCES scans(id),
+  worst_outfit_id INTEGER REFERENCES scans(id),
+  style_evolution TEXT,        -- JSON array of archetype over time
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+---
+
+## FRONTEND PAGES & FLOWS
+
+### Page 0: SPLASH SCREEN (shown for 1.5 seconds on app open)
+
+- Pure black background
+- "DRIP." in Cormorant Garamond, weight 700, ~64px, centered, warm white
+- The period after DRIP is in the score-gold color
+- Subtle fade-in from black, then fade-out to landing/home
+- Below the logo: "AI-Powered Style Intelligence" in Outfit font, all caps, letter-spaced, grey-1
+
+### Page 1: LANDING / ONBOARDING (for logged-out users)
+
+**Above the fold:**
+- Full black background
+- "DRIP." logo, large
+- Headline: "Your outfit. Scored." — Cormorant Garamond, 36px, white
+- Subhead: "AI-powered style analysis in seconds. Know your drip." — Outfit, grey-1
+- A single example result card (pre-made, beautiful) showing a scored outfit — this gives instant visual understanding of what the app does
+- CTA: "RATE MY FIT" — full-width button, white text on white-pure border (outlined button, not filled — more editorial)
+
+**Below the fold (scroll):**
+- "HOW IT WORKS" section — 3 steps with minimal icons:
+  1. "SNAP" — Take a mirror selfie in your outfit
+  2. "SCORE" — AI rates your fit across 5 categories
+  3. "STYLE" — Get upgrades, similar looks, and build your Style DNA
+- Social proof section: "Join 10,000+ people rating their drip" (aspirational)
+- Example score cards in a horizontal scroll showing different outfits/scores
+- Bottom CTA: "GET STARTED" → leads to register page
+
+### Page 2: AUTH (Register / Login)
+
+- Clean, minimal forms on black background
+- Register: username, email, password
+- Login: email, password
+- Toggle between register/login with an underline tab selector
+- After auth → redirect to home/camera
+
+### Page 3: HOME / CAMERA — The Core Screen
+
+This is where users spend 90% of their time.
+
+**Top bar:**
+- Left: User's avatar circle (first letter of username) + username
+- Center: "DRIP." logo, small
+- Right: Settings gear icon
+
+**Main area — two states:**
+
+**State A: "Ready to Scan" (default)**
+- Large camera viewfinder area (takes up ~60% of screen)
+- Below viewfinder: "RATE MY FIT" button — full width, sharp edges, white border outlined
+- Or: "Upload from gallery" text link below the button
+- Tapping either opens the device camera or photo library
+- Below: Horizontal scroll of user's recent scans as small thumbnail cards with scores overlaid
+
+**State B: "Photo Selected" (after choosing/taking a photo)**
+- Photo preview fills the viewfinder area with subtle vignette
+- "ANALYZE" button replaces the capture button — same style but now the text says "ANALYZE MY DRIP"
+- Small "Retake" text link below
+- Tapping ANALYZE triggers the scan flow
+
+### Page 4: ANALYSIS LOADING — The Anticipation Builder
+
+This screen appears while the AI processes (typically 3-8 seconds). It must feel premium and build suspense.
+
+- User's photo displayed large, centered, with a slow subtle ken-burns zoom effect (very slow scale from 1.0 to 1.05)
+- Overlaid: a horizontal scanning line that moves top-to-bottom repeatedly — thin, white, 50% opacity, like a fashion scanner
+- Below the photo: rotating text that changes every 2 seconds:
+  - "Analyzing silhouette..."
+  - "Reading color palette..."
+  - "Detecting style DNA..."
+  - "Evaluating proportions..."
+  - "Checking trend alignment..."
+  - "Calculating your drip..."
+- Text in Outfit font, all-caps, letter-spaced, grey-1, with a fade transition between each
+- Subtle pulsing dot animation next to the text
+
+### Page 5: RESULT — The Hero Screen
+
+This is the most important screen. It must be screenshot-worthy. This is what goes viral.
+
+**Section 1: The Score Card (top of screen, immediate impact)**
+- User's photo on the left (~40% width), full height of this section
+- Right side:
+  - "YOUR DRIP" — small label, all-caps, letter-spaced, grey-2
+  - The score: massive number, Cormorant Garamond, ~72px, colored by tier (gold/silver/bronze/steel)
+  - Below the score: tier label — "ELITE" / "FIRE" / "SOLID" / "NEEDS WORK" in all-caps, same tier color, smaller
+  - Score tier thresholds: 9.0+ = ELITE (gold), 7.5-8.9 = FIRE (silver), 6.0-7.4 = SOLID (bronze), <6.0 = NEEDS WORK (steel)
+  - Below tier: style archetype tag — e.g., "Old Money Casual" in Outfit font, grey-1
+  - Vibe tags as small pill badges: "effortless" "refined" "understated" — border-only pills, grey text
+- This entire section has a very subtle gradient border or glow in the score's tier color
+- SHARE BUTTON: small icon in top-right corner of this section — generates a shareable image card (see Share Card spec below)
+
+**Section 2: Category Breakdown**
+- "BREAKDOWN" label, all-caps, letter-spaced
+- 5 horizontal bar ratings, each showing:
+  - Category name (FIT, COLOR, COHERENCE, TREND, SIGNATURE) — left-aligned, all-caps, small
+  - Score number — right-aligned, Cormorant Garamond
+  - A thin progress bar between them, filled to the score percentage, colored by that score's individual tier
+  - Below each bar: the AI's specific detail text in grey-1, 1-2 lines
+- Each bar staggers in with a 100ms delay on page load
+
+**Section 3: Best & Weakest**
+- Two cards side by side:
+  - "STRONGEST" card — left — subtle green-tinted top border — shows best_element text
+  - "UPGRADE" card — right — subtle gold-tinted top border — shows weakest_element text
+
+**Section 4: Occasion Match**
+- "WHERE TO WEAR IT" label
+- A horizontal row of 5 circular radial progress indicators:
+  - Each shows an occasion (Casual, Date, Work, Formal, Street) with a small icon above
+  - The circle fills proportionally to the match score
+  - Score number in the center of each circle
+
+**Section 5: Style Upgrades — THE MONETIZATION SECTION**
+- "LEVEL UP YOUR DRIP" label
+- Cards for each upgrade suggestion:
+  - "SWAP" line: what to replace
+  - "WITH" line: what to get instead
+  - Predicted score boost: "+0.7" in green with an up-arrow
+  - Price range badge
+  - "SHOP" button → opens a Google Shopping search for the item (or affiliate link)
+  - Cards have a very subtle gold-tinted left border to signal "premium advice"
+
+**Section 6: Similar Outfits — INSPIRATION GRID**
+- "SIMILAR DRIP" label
+- A Pinterest-style masonry grid of similar outfit images (fetched from web or curated database)
+- Each image is tappable to view larger
+- If no similar images are available, show the search queries as tappable tags that open Google/Pinterest searches
+- 2 columns, staggered heights for visual interest
+
+**Section 7: Celebrity Match**
+- "YOUR STYLE TWIN" label  
+- Celebrity name in Cormorant Garamond, large
+- Match percentage as a circular badge
+- 1-line description of the similarity
+- This is the MOST shareable element — people love being compared to celebrities
+
+**Section 8: Actions Bar (sticky bottom)**
+- "SCAN AGAIN" — outlined button, left
+- "SHARE" — filled white button, right
+- Both sharp/square edges, full-width split
+
+### Page 6: SHARE CARD GENERATOR
+
+When user taps "Share," the app generates a beautiful image card for social media:
+
+**The Share Card (1080x1350px — Instagram portrait ratio):**
+- Pure black background
+- User's photo on top half, cropped nicely with vignette
+- Bottom half:
+  - "DRIP." logo, small, top-left
+  - Score in massive Cormorant Garamond, tier-colored
+  - Tier label below score
+  - Style archetype
+  - Vibe tags
+  - The 5 category scores as a compact horizontal bar chart
+  - "drip.app" watermark at bottom — subtle, grey-2
+- This card should be generated client-side using html2canvas or a canvas API
+- After generation: native share sheet (Web Share API) or download button
+
+### Page 7: SCAN HISTORY
+
+- "YOUR DRIP ARCHIVE" heading
+- Vertical scroll of past scans:
+  - Each card shows: thumbnail photo, score (tier-colored), date, style archetype
+  - Tapping opens the full result page for that scan
+- At top: summary stats:
+  - Total fits rated: X
+  - Average score: X.X
+  - Highest score: X.X (with date)
+  - Current streak: X days
+- Filter/sort options: by date, by score (high→low), by category
+
+### Page 8: STYLE DNA
+
+This page only becomes available after 5+ scans. Before that, show a progress bar: "Scan 3 more outfits to unlock your Style DNA."
+
+**Once unlocked:**
+- "YOUR STYLE DNA" heading in Cormorant Garamond
+- **Dominant Archetype:** Large text showing their most common style (e.g., "73% Old Money Casual")
+- **Style Radar Chart:** A pentagon/radar chart showing their average scores across the 5 categories — rendered in SVG, animated on load
+- **Color Palette:** Their most-worn colors displayed as a row of circles, extracted from their scans
+- **Score Trend:** A minimal line graph showing their score trajectory over time (are they improving?)
+- **Best Fit Ever:** Their highest-scored outfit displayed as a small card
+- **Monthly Style Report:** If 10+ scans in a month, generate a "DRIP REPORT" summary card (similar to Spotify Wrapped) that's shareable:
+  - Total outfits rated
+  - Average score + trend
+  - Most-worn style
+  - Best outfit
+  - Top color palette
+  - "Your Style in One Word" AI-generated summary
+
+### Page 9: SETTINGS / PROFILE
+
+- Profile info (username, email)
+- "My Style Preferences" — optional tags the user can set (casual, streetwear, formal, etc.) to improve AI accuracy
+- Premium upgrade section (see monetization)
+- Notification preferences
+- "About DRIP." section
+- Privacy policy / Terms
+- Logout
+- "Add to Home Screen" instructions (for PWA installation)
+- Delete account option
+
+---
+
+## PWA CONFIGURATION
+
+### manifest.json
+```json
+{
+  "name": "DRIP. — AI Style Intelligence",
+  "short_name": "DRIP.",
+  "description": "AI-powered outfit rating and style analysis",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+```
+
+### Service Worker
+Register a basic service worker that caches the app shell for offline splash screen display. Not full offline functionality — this app requires network for AI analysis.
+
+### App Icons
+Create SVG/PNG icons:
+- The "DRIP." wordmark in Cormorant Garamond on a pure black background
+- The period in gold (#C9A84C)
+- Clean, recognizable at 192px and 512px
+
+---
+
+## MONETIZATION / PAYWALL
+
+### Free Tier
+- 3 outfit scans per day
+- Full score + basic breakdown (5 categories)
+- Share card generation
+- Scan history (last 10)
+
+### Premium — "DRIP. PRO" ($6.99/month)
+- Unlimited scans
+- Full upgrade recommendations with shopping links
+- Similar outfit inspiration grid
+- Celebrity style match
+- Style DNA profile + monthly reports
+- Full scan history (unlimited)
+- Priority AI analysis (faster)
+- No watermark on share cards
+
+### Paywall UI
+When a free user tries to access a premium feature:
+- Smooth slide-up modal from bottom (not a jarring popup)
+- Black background, centered content
+- "UNLOCK YOUR FULL DRIP" in Cormorant Garamond
+- Feature comparison: Free vs Pro in a clean two-column layout
+- "$6.99/mo" in large text
+- "START FREE TRIAL" button — outlined, sharp
+- "Not now" dismiss link below
+- This modal should feel like a luxury upsell, not a paywall punishment
+
+### Demo Mode
+Secret activation: tap the "DRIP." logo on the splash/home screen 5 times rapidly.
+- Unlocks all premium features
+- Ensures AI analysis always returns impressive results
+- Shows a small "DEMO" pill in the top corner
+- Uses enhanced fallback data if API is slow
+- This is for the pitch competition demo — the app must never fail on stage
+
+---
+
+## SIMILAR OUTFITS SYSTEM
+
+For the "Similar Drip" section on each result, implement this:
+
+**Option A (preferred if API available):** Use Google Custom Search API (or Bing Image Search API) with the AI-generated search queries to fetch real outfit images from Pinterest, fashion blogs, etc.
+
+**Option B (fallback — always implement this):** Pre-load a curated database of 100-200 outfit images organized by style archetype. Store them in a `curated_outfits` table:
+
+```sql
+CREATE TABLE curated_outfits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  image_url TEXT NOT NULL,
+  style_archetype TEXT NOT NULL,
+  gender TEXT,
+  season TEXT,
+  tags TEXT,  -- JSON array: ["casual", "streetwear", "oversized"]
+  source_credit TEXT
+);
+```
+
+Seed this with real outfit inspiration images from free fashion image APIs or public Pinterest boards. Match them to the user's scan based on style_archetype and gender_detected.
+
+---
+
+## RECOMMENDATIONS ENGINE
+
+For the "Level Up" upgrade suggestions, each recommendation should include a "SHOP" action. Implement this as:
+
+1. AI generates a `search_query` for each upgrade (e.g., "white minimal leather sneakers men")
+2. The "SHOP" button opens: `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(search_query)}`
+3. This takes users directly to Google Shopping results for that item
+4. In a production version, these would be affiliate links (Amazon Associates, ASOS, etc.)
+
+---
+
+## ANIMATIONS SPECIFICATION
+
+### Score Counter Reveal
+```
+- Start at 0.0
+- Count up to final score over 1.5 seconds
+- Easing: cubic-bezier(0.16, 1, 0.3, 1) — fast start, smooth deceleration
+- At completion: single pulse-glow in tier color (scale 1.0 → 1.05 → 1.0, opacity of glow 0 → 0.3 → 0)
+- Score font: Cormorant Garamond, 72px
+```
+
+### Category Bars
+```
+- Each bar animates from width 0% to final percentage
+- Duration: 0.8s per bar
+- Stagger: 100ms between bars
+- Easing: ease-out
+```
+
+### Scanning Screen
+```
+- Scan line: white horizontal line, 1px, 40% opacity
+- Moves top-to-bottom over 2 seconds, repeats
+- Ken Burns on photo: scale 1.0 → 1.05 over 10 seconds
+- Status text: crossfade transition, 2s per message
+```
+
+### Share Card Generation
+```
+- When "Share" tapped: the result card section briefly flashes white (opacity 0 → 0.1 → 0, 300ms) like a camera flash
+- Then the share card slides up from bottom
+```
+
+---
+
+## GLOBAL APP BEHAVIOR
+
+### Navigation
+- Bottom tab bar with 3 tabs:
+  1. **Camera** (home icon or viewfinder icon) — the scan page
+  2. **Archive** (grid icon) — scan history
+  3. **DNA** (fingerprint or DNA helix icon) — Style DNA page
+- Current tab indicated by white icon, inactive tabs in grey-3
+- Tab bar: black background, thin top border in var(--border)
+- No tab labels — icons only, minimal
+
+### Haptic Feedback (where supported)
+- Trigger navigator.vibrate() on:
+  - Score reveal moment (short buzz)
+  - Successful share (short buzz)
+  - Tab switches (micro buzz)
+
+### Image Upload Handling
+- Accept camera capture and gallery upload
+- Compress images to max 1200px on longest edge before upload (saves bandwidth)
+- Show upload progress bar during transfer
+- Max file size: 10MB
+- Accepted formats: jpg, png, webp, heic (convert heic to jpg server-side)
+
+### Error States
+- API timeout: show fallback results, never a blank screen
+- No internet: show cached last scan, "Offline" banner at top
+- Invalid image (not an outfit): show the AI's error message in a clean card with "Try Again" button
+- All errors use the same black card style — no jarring red/white error modals
+
+### Performance
+- Lazy load images below the fold
+- Skeleton screens for all loading states (dark shimmer, not grey)
+- Debounce rapid scan button taps (prevent double-submission)
+- Cache the last 3 scan results client-side for instant re-viewing
+
+---
+
+## LEADERBOARD (Optional — build if time allows)
+
+A "TOP DRIP" page accessible from the home screen:
+- Shows the highest-scored outfits from all users (anonymized or by username)
+- Cards: photo thumbnail (blurred slightly for privacy unless user opted in) + score + archetype
+- Daily / Weekly / All-Time toggle
+- Users can opt-in to having their scans appear on the leaderboard
+- This creates community competition and gives another reason to scan daily
+
+---
+
+## PRE-LAUNCH SEED DATA
+
+Pre-load the database with 5-10 demo scans so the app doesn't look empty:
+- Include a variety of styles: streetwear, old money, athleisure, formal, minimalist
+- Include both male and female outfits
+- Scores ranging from 6.2 to 9.1
+- These appear on the landing page example carousel and in the leaderboard
+
+---
+
+## FINAL BUILD CHECKLIST
+
+- [ ] PWA manifest.json + service worker + app icons
+- [ ] Splash screen with DRIP. logo animation
+- [ ] Landing page with example result cards
+- [ ] Auth flow (register/login with JWT)
+- [ ] Camera/upload interface
+- [ ] Photo compression before upload
+- [ ] OpenAI Vision API integration with structured prompt
+- [ ] Fallback results system (demo never breaks)
+- [ ] Analysis loading screen with scanning animation
+- [ ] Full result page with all 8 sections
+- [ ] Score reveal counting animation with tier colors
+- [ ] Category breakdown with animated bars
+- [ ] Upgrade recommendations with SHOP links
+- [ ] Similar outfits grid (curated DB + optional image search API)
+- [ ] Celebrity style match section
+- [ ] Shareable score card generation (canvas/html2canvas)
+- [ ] Native share via Web Share API
+- [ ] Scan history page with stats
+- [ ] Style DNA page (unlocked after 5+ scans)
+- [ ] Style radar chart (SVG)
+- [ ] Score trend line graph
+- [ ] Settings page with demo mode trigger
+- [ ] Premium paywall modal
+- [ ] Demo mode (5x logo tap to activate)
+- [ ] Bottom tab navigation (3 tabs, icon-only)
+- [ ] Mobile-first responsive (430px max, phone frame on desktop)
+- [ ] All fonts loaded: Cormorant Garamond, Outfit
+- [ ] Full dark theme with editorial noir palette
+- [ ] Sharp edges (2px border-radius cards, 0px buttons)
+- [ ] All-caps labels with letter-spacing throughout
+- [ ] Skeleton loading screens (dark shimmer)
+- [ ] Error handling (never shows a broken screen)
+- [ ] SQLite database with all tables
+- [ ] Curated outfits seeded in DB
+- [ ] Public deployment via Replit
+
+---
+
+## THE NORTH STAR
+
+Every design decision should pass this test: "Would this screenshot look at home on a Vogue or GQ Instagram story?" If no, refine it until it does.
+
+This app is not a tech product that happens to be about fashion. It is a fashion product that happens to use tech. Design accordingly.
+
+Build it like a $10M startup. Ship it like it launches tomorrow. Because it does.
