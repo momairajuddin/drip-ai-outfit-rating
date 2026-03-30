@@ -1,0 +1,3 @@
+# DRIP. — AI-Powered Outfit Rating
+
+Initializing repository...
